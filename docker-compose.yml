@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+
+  collector:
+    build: ./services/collector
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SCHWAB_API_KEY: ${SCHWAB_API_KEY}
+      SCHWAB_APP_SECRET: ${SCHWAB_APP_SECRET}
+      SCHWAB_CALLBACK_URL: ${SCHWAB_CALLBACK_URL}
+      SCHWAB_TOKEN_PATH: /tokens/token.json
+      POLL_INTERVAL_POSITIONS: ${POLL_INTERVAL_POSITIONS:-30}
+      POLL_INTERVAL_QUOTES: ${POLL_INTERVAL_QUOTES:-60}
+    volumes:
+      - token_data:/tokens
+
+  positions:
+    build: ./services/positions
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+
+  paper:
+    build: ./services/paper
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DEFAULT_FILL_MODEL: ${DEFAULT_FILL_MODEL:-mid}
+
+  analytics:
+    build: ./services/analytics
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+
+  api:
+    build: ./services/api
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
+  token_data:
