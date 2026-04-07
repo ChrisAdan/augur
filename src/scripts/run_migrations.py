@@ -1,4 +1,4 @@
-# scripts/run_migrations.py
+# src/scripts/run_migrations.py
 import psycopg2
 from psycopg2.extensions import connection as PGConnection
 from pathlib import Path
@@ -6,28 +6,28 @@ from services.common.config import settings
 from typing import Optional
 import sys
 
-MIGRATIONS_FOLDER = Path(__file__).parent.parent / "migrations"
+MIGRATIONS_FOLDER = Path(__file__).parent.parent.parent / "db" / "migrations"
 
 
-def get_connection(db: Optional[str]) -> PGConnection:
-    """Connect to Postgres (optionally specify database)"""
+def get_connection(db: Optional[str] = None) -> PGConnection:
     return psycopg2.connect(
         host=settings.postgres_host,
         port=settings.postgres_port,
         dbname=db or settings.postgres_db,
         user=settings.postgres_user,
-        password=settings.postgres_password
+        password=settings.postgres_password,
+        options="-c search_path=src,public",
     )
 
 
 def ensure_migration_table(conn: PGConnection) -> None:
-    """Create table to track applied migrations"""
     with conn.cursor() as cur:
+        cur.execute("CREATE SCHEMA IF NOT EXISTS src")
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS applied_migrations (
-                id SERIAL PRIMARY KEY,
-                filename TEXT UNIQUE NOT NULL,
-                applied_at TIMESTAMP DEFAULT NOW()
+            CREATE TABLE IF NOT EXISTS src.applied_migrations (
+                id          SERIAL PRIMARY KEY,
+                filename    TEXT UNIQUE NOT NULL,
+                applied_at  TIMESTAMPTZ DEFAULT NOW()
             )
         """)
     conn.commit()
@@ -35,8 +35,8 @@ def ensure_migration_table(conn: PGConnection) -> None:
 
 def get_applied_migrations(conn: PGConnection) -> set[str]:
     with conn.cursor() as cur:
-        cur.execute("SELECT filename FROM applied_migrations")
-        return set(row[0] for row in cur.fetchall())
+        cur.execute("SELECT filename FROM src.applied_migrations")
+        return {row[0] for row in cur.fetchall()}
 
 
 def apply_migration(conn: PGConnection, migration_file: Path) -> None:
@@ -44,34 +44,39 @@ def apply_migration(conn: PGConnection, migration_file: Path) -> None:
     with conn.cursor() as cur:
         cur.execute(sql)
         cur.execute(
-            "INSERT INTO applied_migrations (filename) VALUES (%s)",
-            (migration_file.name,)
+            "INSERT INTO src.applied_migrations (filename) VALUES (%s)",
+            (migration_file.name,),
         )
     conn.commit()
-    print(f"Applied migration: {migration_file.name}")
+    print(f"  applied: {migration_file.name}")
 
 
 def run_migrations() -> None:
-    # Step 1: ensure database exists
-    try:
-        conn = get_connection(db = settings.postgres_db)
-    except psycopg2.OperationalError:
-        print(f"Database '{settings.postgres_db}' does not exist.")
+    if not MIGRATIONS_FOLDER.exists():
+        print(f"Migrations folder not found: {MIGRATIONS_FOLDER}")
         sys.exit(1)
 
-    # Step 2: ensure migration tracking table exists
-    ensure_migration_table(conn)
+    try:
+        conn = get_connection()
+    except psycopg2.OperationalError as e:
+        print(f"Could not connect to database '{settings.postgres_db}': {e}")
+        sys.exit(1)
 
-    # Step 3: get list of already applied migrations
+    ensure_migration_table(conn)
     applied = get_applied_migrations(conn)
 
-    # Step 4: apply new migrations in order
     migrations = sorted(MIGRATIONS_FOLDER.glob("*.sql"))
-    for m in migrations:
-        if m.name not in applied:
-            apply_migration(conn, m)
+    pending = [m for m in migrations if m.name not in applied]
 
-    print("All migrations applied.")
+    if not pending:
+        print("All migrations already applied.")
+        return
+
+    print(f"Applying {len(pending)} migration(s)...")
+    for m in pending:
+        apply_migration(conn, m)
+
+    print("Done.")
 
 
 if __name__ == "__main__":

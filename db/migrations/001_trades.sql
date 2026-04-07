@@ -1,4 +1,6 @@
-CREATE TABLE IF NOT EXISTS trades (
+CREATE SCHEMA IF NOT EXISTS src;
+
+CREATE TABLE IF NOT EXISTS src.trades (
     id              SERIAL PRIMARY KEY,
     trade_number    INTEGER,
     underlying      VARCHAR(16) NOT NULL,
@@ -21,9 +23,9 @@ CREATE TABLE IF NOT EXISTS trades (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS trade_closes (
+CREATE TABLE IF NOT EXISTS src.trade_closes (
     id              SERIAL PRIMARY KEY,
-    trade_id        INTEGER NOT NULL REFERENCES trades(id),
+    trade_id        INTEGER NOT NULL REFERENCES src.trades(id),
     closed_at       TIMESTAMPTZ NOT NULL,
     close_price     NUMERIC(10, 2) NOT NULL,
     dte_at_close    INTEGER,
@@ -36,8 +38,8 @@ CREATE TABLE IF NOT EXISTS trade_closes (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_trades_underlying ON trades(underlying);
-CREATE INDEX idx_trades_strategy_type ON trades(strategy_type);
-CREATE INDEX idx_trades_opened_at ON trades(opened_at);
-CREATE INDEX idx_trades_is_paper ON trades(is_paper);
-CREATE INDEX idx_trade_closes_trade_id ON trade_closes(trade_id);
+CREATE INDEX idx_trades_underlying ON src.trades(underlying);
+CREATE INDEX idx_trades_strategy_type ON src.trades(strategy_type);
+CREATE INDEX idx_trades_opened_at ON src.trades(opened_at);
+CREATE INDEX idx_trades_is_paper ON src.trades(is_paper);
+CREATE INDEX idx_trade_closes_trade_id ON src.trade_closes(trade_id);
