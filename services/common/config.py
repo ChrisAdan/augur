@@ -5,6 +5,7 @@ import os
 
 load_dotenv()
 
+
 class Settings(BaseModel):
     # Alpaca
     alpaca_api_key: str
@@ -18,9 +19,7 @@ class Settings(BaseModel):
     postgres_user: str
     postgres_password: str
 
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+    model_config = {"arbitrary_types_allowed": True}
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -32,7 +31,8 @@ class Settings(BaseModel):
             postgres_port=int(os.getenv("POSTGRES_PORT", "5432")),
             postgres_db=os.getenv("POSTGRES_DB", "augur"),
             postgres_user=os.getenv("POSTGRES_USER", "postgres"),
-            postgres_password=os.getenv("POSTGRES_PASSWORD", "postgres"),  # remove before commit
+            postgres_password=os.getenv("POSTGRES_PASSWORD", ""),
         )
-    
+
+
 settings = Settings.from_env()
